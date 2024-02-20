@@ -1,11 +1,11 @@
 import java.net.*;
 import java.nio.*;
 
-public class ServerUDP {
+class ServerUDP {
 	public static void main(String[] args) throws Exception {
 		// Check if port number is provided
 		if (args.length != 1) {
-			System.out.println("java ServerUDP <portnumber>");
+			System.out.println("Arguments Error");
 			return;
 		}
 
@@ -18,7 +18,7 @@ public class ServerUDP {
 		// Create byte arrays for receiving and sending data
 		byte[] receiveData = new byte[1024];
 		byte[] sendData;
-
+		System.out.println("Server started");
 		while(true) {
 			// Receive packet from client
 			DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
@@ -28,51 +28,54 @@ public class ServerUDP {
 			ByteBuffer wrapped = ByteBuffer.wrap(receiveData);
 
 			// Parse the received data
-			byte tml = wrapped.get();
-			byte opCode = wrapped.get();
+			byte totalMessageLength = wrapped.get();
+			byte operationCode = wrapped.get();
 			int operand1 = wrapped.getInt();
 			int operand2 = wrapped.getInt();
 			short requestId = wrapped.getShort();
-			byte opNameLength = wrapped.get();
-			byte[] opNameBytes = new byte[opNameLength];
-			wrapped.get(opNameBytes);
-			String opName = new String(opNameBytes, "UTF-16BE");
+			byte operationNameLength = wrapped.get();
+			byte[] operationNameBytes = new byte[operationNameLength];
+			wrapped.get(operationNameBytes);
+			String operationName = new String(operationNameBytes, "UTF-16BE");
 
 			// Print the parsed data
+			System.out.println("Request in HEX: " + bytesToHex(receiveData, totalMessageLength));
 			System.out.println("RequestID: " + requestId);
-			System.out.println("Request[Hex]: " + bytesToHex(receiveData, tml));
-			System.out.println("Operation Name: " + opName);
+			System.out.println("Operation Name: " + operationName);
 			System.out.println("Operand1: " + operand1);
 			System.out.println("Operand2: " + operand2);
 
-			// Perform the operation based on the opCode
-			int result = 0;
-			byte errorCode = 0; // assume no error
-			switch(opCode) {
-				case 0: result = operand1 * operand2; break;
-				case 1: result = operand1 / operand2; break;
-				case 2: result = operand1 | operand2; break;
-				case 3: result = operand1 & operand2; break;
-				case 4: result = operand1 - operand2; break;
-				case 5: result = operand1 + operand2; break;
-				default: errorCode = 127; // invalid request
-			}
+			// Perform the operation based on the operationCode
+			int result = performOperation(operationCode, operand1, operand2);
 
 			// Prepare the response packet
 			ByteBuffer buffer = ByteBuffer.allocate(8);
-			buffer.put((byte)8); // TML
+			buffer.put((byte)8); // Total Message Length
 			buffer.putInt(result);
-			buffer.put(errorCode);
+			buffer.put((byte)0); // Error Code
 			buffer.putShort(requestId);
 			sendData = buffer.array();
 
 			// Get client's address and port
-			InetAddress IPAddress = receivePacket.getAddress();
-			int port = receivePacket.getPort();
+			InetAddress clientAddress = receivePacket.getAddress();
+			int clientPort = receivePacket.getPort();
 
 			// Send the response packet
-			DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, IPAddress, port);
+			DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, clientAddress, clientPort);
 			serverSocket.send(sendPacket);
+		}
+	}
+
+	// Method to perform operation based on the operationCode
+	private static int performOperation(byte operationCode, int operand1, int operand2) {
+		switch(operationCode) {
+			case 0: return operand1 * operand2;
+			case 1: return operand1 / operand2;
+			case 2: return operand1 | operand2;
+			case 3: return operand1 & operand2;
+			case 4: return operand1 - operand2;
+			case 5: return operand1 + operand2;
+			default: return 127; // invalid request
 		}
 	}
 
